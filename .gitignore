@@ -7,6 +7,9 @@
 # Generated binary
 agent-mail
 
+# Generated resources
+resources.go
+
 # Test binary, build with `go test -c`
 *.test
 

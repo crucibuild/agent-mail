@@ -1,0 +1,7 @@
+{
+  "name": "agent-mail",
+  "title": "Agent Mail",
+  "description" : "Crucibuild agent which provides email sending",
+  "version": "0.1.0",
+  "keyword": ["go", "agent", "email"]
+}
