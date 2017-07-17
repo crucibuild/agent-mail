@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "crucibuild/agent-mail#mail-sent-command",
+  "doc": "Event that states that an email has been successfully sent",
+  "fields": [
+    {
+      "name": "id",
+      "doc": "The unique identifier of the email sent.",
+      "type": "string"
+    }
+  ]
+}

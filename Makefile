@@ -12,8 +12,8 @@ check: dependencies
 	gometalinter -j2 --config "$(CURDIR)/gometalinter.json" ./...
 
 build: dependencies
-	resources -output="resources.go" -var="Resources" -trim="" resources/* schema/*
-	go build ./...
+	resources -output="resources.go" -var="Resources" -trim="" resources/* schema/*.avro
+	go build .
 
 ci: build #TODO fix warnings check
 	true

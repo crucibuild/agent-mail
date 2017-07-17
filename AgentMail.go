@@ -19,6 +19,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"fmt"
+	"github.com/crucibuild/agent-mail/schema"
 	"github.com/crucibuild/sdk-agent-go/agentiface"
 	"github.com/crucibuild/sdk-agent-go/agentimpl"
 )
@@ -79,6 +81,49 @@ func NewAgentMail() (agentiface.Agent, error) {
 	return agent, nil
 }
 
-func (a *AgentMail) init() error {
+func (a *AgentMail) init() (err error) {
+	// register schemas:
+	schemas := []string{
+		"/schema/send-mail-command.avro",
+		"/schema/mail-sent-event.avro",
+	}
+	if err = a.registerSchemas(schemas); err != nil {
+		return err
+	}
+
+	// register types:
+	types := []agentiface.Type{
+		schema.SendMailCommandType,
+		schema.MailSentEventType,
+	}
+	err = a.registerTypes(types)
+
+	return err
+}
+
+func (a *AgentMail) registerSchemas(pathes []string) error {
+	for _, path := range pathes {
+		content := mustOpenResources(path)
+
+		s, err := agentimpl.LoadAvroSchema(string(content[:]), a)
+		if err != nil {
+			return fmt.Errorf("Failed to load schema %s: %s", path, err.Error())
+		}
+
+		_, err = a.SchemaRegister(s)
+
+		if err != nil {
+			return fmt.Errorf("Failed to register schema %s: %s", path, err.Error())
+		}
+	}
+	return nil
+}
+
+func (a *AgentMail) registerTypes(types []agentiface.Type) error {
+	for _, t := range types {
+		if _, err := a.TypeRegister(t); err != nil {
+			return fmt.Errorf("Failed to register type %s (which is a %s): %s", t.Name(), t.Type().Name(), err.Error())
+		}
+	}
 	return nil
 }

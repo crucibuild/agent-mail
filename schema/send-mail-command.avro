@@ -1,0 +1,33 @@
+{
+  "type": "record",
+  "name": "crucibuild/agent-mail#send-mail-command",
+  "doc": "Command that expresses an order to send an email.",
+  "fields": [
+    {
+      "name": "id",
+      "doc": "The unique identifier of the command.",
+      "type": "string"
+    },
+    {
+      "name": "to",
+      "doc": "The recipient of the email. Note that the recipient passed in this parameter will be visible as part of the message.",
+      "type": "string"
+    },
+    {
+      "name": "subject",
+      "doc": "The subject of the email",
+      "type": "string"
+    },
+    {
+      "name": "content",
+      "doc": "The plain (text) content of the email message.",
+      "type": "string"
+    },
+    {
+      "name": "from",
+      "doc": "The originator of the email message.",
+      "type": "string"
+    }
+  ]
+}
+
