@@ -16,13 +16,23 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
-
 	"fmt"
 	"github.com/crucibuild/agent-mail/schema"
 	"github.com/crucibuild/sdk-agent-go/agentiface"
 	"github.com/crucibuild/sdk-agent-go/agentimpl"
+	"io/ioutil"
+	"net/http"
+	"net/smtp"
+	"net/url"
+)
+
+const (
+	// OptionMailServerKey is the name of the option for the mail server
+	OptionMailServerKey = "mailserver"
+	// OptionMailServerDefaultValue is the default URI of the mail server
+	OptionMailServerDefaultValue = "smpt://localhost:25/"
+	// OptionMailServerUsage is the documentation for the option mail server
+	OptionMailServerUsage = "Specifies the URI (with login credentials) of the mail server to use. The typical form is following (taking SMTP as an example): smtp://[username@]host[:port][?password=somepwd]. By default, the local smtp server (available on port 25) without any authentication is used."
 )
 
 // Resources represents an handler on the various data files
@@ -82,6 +92,19 @@ func NewAgentMail() (agentiface.Agent, error) {
 }
 
 func (a *AgentMail) init() (err error) {
+	// register configuration options
+	a.SetDefaultConfigOption(OptionMailServerKey, OptionMailServerDefaultValue)
+
+	// registers additional CLI options
+	for _, c := range a.Cli.RootCommand().Commands() {
+		if c.Use == "agent:start" {
+			c.Flags().String(OptionMailServerKey, OptionMailServerDefaultValue, OptionMailServerUsage)
+			a.BindConfigPFlag(OptionMailServerKey, c.Flags().Lookup(OptionMailServerKey)) // nolint: errcheck, no error can occur here, by construction.
+
+			break
+		}
+	}
+
 	// register schemas:
 	schemas := []string{
 		"/schema/send-mail-command.avro",
@@ -97,6 +120,9 @@ func (a *AgentMail) init() (err error) {
 		schema.MailSentEventType,
 	}
 	err = a.registerTypes(types)
+
+	// register state callback
+	a.RegisterStateCallback(a.onStateChange)
 
 	return err
 }
@@ -126,4 +152,80 @@ func (a *AgentMail) registerTypes(types []agentiface.Type) error {
 		}
 	}
 	return nil
+}
+
+func (a *AgentMail) onStateChange(state agentiface.State) error {
+	switch state {
+	case agentiface.StateConnected:
+		if _, err := a.RegisterCommandCallback(agentiface.MessageName(schema.SendMailCommandType.Name()), a.onSendMailCommand); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *AgentMail) onSendMailCommand(ctx agentiface.CommandCtx) error {
+	cmd := ctx.Message().(*schema.SendMailCommand)
+
+	a.Info(fmt.Sprintf("Received send-mail-command: From: '%s' To: '%s' Subject: '%s' ", cmd.From, cmd.To, cmd.Subject))
+
+	// Connect to the remote SMTP server.
+	c, err := a.connectToMailServer()
+
+	if err != nil {
+		return nil
+	}
+
+	// Set the sender and recipient first
+	if err := c.Mail(cmd.From); err != nil {
+		return err
+	}
+
+	if err := c.Rcpt(cmd.To); err != nil {
+		return err
+	}
+
+	// Send the email body.
+	wc, err := c.Data()
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprint(wc, cmd.Content)
+	if err != nil {
+		return err
+	}
+
+	err = wc.Close()
+	if err != nil {
+		return err
+	}
+
+	// Send the QUIT command and close the connection.
+	err = c.Quit()
+	if err != nil {
+		return err
+	}
+
+	return ctx.SendEvent(&schema.MailSentEvent{Id: cmd.Id})
+}
+
+func (a *AgentMail) connectToMailServer() (*smtp.Client, error) {
+	mailserverURI, err := url.Parse(a.GetConfigString(OptionMailServerKey))
+
+	if err != nil {
+		return nil, err
+	}
+
+	if mailserverURI.User.Username() == "" {
+		// use simple connection
+		c, err := smtp.Dial(fmt.Sprintf("%s:%s", mailserverURI.Host, mailserverURI.Port()))
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+
+	return nil, fmt.Errorf("Authentication scheme not yet supported")
+
 }
